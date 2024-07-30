@@ -1,0 +1,20 @@
+[project]
+name = "utilities"
+version = "0.0.1"
+authors = [
+    { name = "Elias Attias", email = "attiaselias@gmail.com" }
+]
+description = "A utility package for common data analytics"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent"
+]
+dependencies = [
+    "pandas >= 2.1.4"
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"

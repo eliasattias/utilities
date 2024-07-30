@@ -1,0 +1,100 @@
+# %%
+import pandas as pd
+import logging
+import snowflake.connector
+import os
+from snowflake.connector.pandas_tools import write_pandas
+
+# %%
+class Snowflake:
+
+    """
+        Class for managing the connection and interaction with the Snowflake Database
+
+        Connection information is contained in ~/.snowflake/connections.toml 
+    """
+    
+    def __init__(self, connection_name):
+        """Initialize the Snowflake connection when creating instance"""
+        
+        Snowflake.logger = logging.getLogger(os.getenv('LOG_ENV'))
+        Snowflake.snowcon = snowflake.connector.connect(connection_name=connection_name)
+
+    def query_data(self, query):
+        """Requires a select statement and returns data loaded in a Panda Dataframe"""
+
+        cur = self.snowcon.cursor()
+        try:
+            Snowflake.logger.info(f'Excuting query_data(...) in app.data.Snowflake class: {query}')
+            cur.execute(query)
+        except:
+            print('Invalid Query, please check:\n',query)
+            raise
+        else:
+            colnames = [col[0] for col in cur.description]
+            raw = cur.fetchall()
+            df = pd.DataFrame(raw, columns=colnames)
+            return df
+    
+    def write_data(self, df, table_name, overwrite = False):
+        """ Write a dataframe to a Snowflake table. Optional overwrite parameter determines if to append (False) or overwrite current records (True)"""
+        success, num_chunks, num_rows, output = write_pandas(
+                                                                conn=self.snowcon,
+                                                                df=df,
+                                                                table_name=table_name,
+                                                                overwrite= overwrite
+                                                            )
+
+        if success:
+            return f"Table {table_name} was successfully written to Snowflake with {num_rows} records"
+        else:
+            return f'Table {table_name} failed to write to Snowflake'
+    
+    def query_and_commit_data(self, path_to_script):
+        """Execute Snowflake query from a file and commit changes"""
+        
+        cur = self.snowcon.cursor()
+        try:
+            with open(path_to_script, 'r') as query_file:
+                f_string = query_file.read().split(';;')
+
+            for query in f_string:
+                cur.execute(query)
+            
+            self.snowcon.commit()
+            self.logger.info(f'Successfully executed and committed Snowflake query from {path_to_script}')
+        except Exception as e:
+            self.logger.error(f'Error executing and committing Snowflake query from {path_to_script}: {e}')
+            raise
+        
+    def update_data(self, query):
+        """Requires an update statement"""
+        cur = self.snowcon.cursor()
+        try:
+            Snowflake.logger.info(f'Excuting update_data(...) in app.data.Snowflake class: {query}')
+            cur.execute(query)
+        except:
+            print('Invalid Update, please check:\n',query)
+            raise
+
+    def insert_data_from_dataframe(self, df, table_name, query_template): #review
+        """Insert data from a DataFrame into a Snowflake table using parameterized queries"""
+        cur = self.snowcon.cursor()
+        
+        # Convert DataFrame to a list of tuples
+        data = [tuple(row) for row in df.values]
+        
+        try:
+            # Execute the insert statement for each row
+            cur.executemany(query_template, data)
+            self.snowcon.commit()
+            self.logger.info(f'Successfully inserted data into {table_name}')
+        except Exception as e:
+            self.logger.error(f'Error inserting data into {table_name}: {e}')
+            raise e
+
+    def disconnect(self):
+        """Close the connection to Snowflake when finished"""
+        self.snowcon.close()
+
+
